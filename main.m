@@ -207,7 +207,7 @@ end
 
 
 function resault = f(params)
-    model = mphload('models\GraviCon_GS_results.mph');
+    model = mphload('models\GraviCon_GS.mph');
     for i = 1:length(params.value)
         name = params.name{i};
         value = params.value(i);
