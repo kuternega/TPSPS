@@ -4,24 +4,48 @@ params.name = {'H', 'L', 'gamma', 'V0', 'C0', 'T0', 'iav'};
 params.step = [0.003, 0.01, pi/12, 0.00005, 50, 15, 10];
 params.tol = [0.0005, 0.001, pi/32, 0.00001, 1, 1, 1];
 
-
+file_name = 'data output/data_output_H.csv';
 maxIter = 5;
 timeout = 10*60;
 func = @(param) f(param);
-[x_min, f_min, data] = coordDescentGoldenAuto(func, params, maxIter, timeout);  
+data = load_data(file_name);
+[x_min, f_min, data] = coordDescentGoldenAuto(func, params, maxIter, timeout, data);  
 fprintf('\n\n\nОптимальное значение параметров:\n');
 for i = 1:length(x_min.value)
     fprintf('%s = %f\n', x_min.name{i}, x_min.value(i));
 end
 fprintf('Оптимальное значение функции: %f\n',f_min);
 
-function [x_best, f_best, data] = coordDescentGoldenAuto(f, x, maxIter, timeout)
-    n = numel(x.value);
+
+function [data] = load_data(file_name)
     data = [];
+    try
+        % Попытка считать таблицу
+        T = readtable(file_name);
+
+        % Обработка данных
+        params = unique(T.param);
+
+        for i = 1:length(params)
+            idx = T.param == params(i);
+            data(i).x = T.x(idx);
+            data(i).y = T.y(idx);
+        end
+        disp('Файл успешно прочитан и обработан.');
+
+    catch ME
+        % Обработка ошибки
+        fprintf('Ошибка при чтении файла: %s\n', ME.message);        
+    end
+end
+
+
+function [x_best, f_best, data] = coordDescentGoldenAuto(f, x, maxIter, timeout, data)
+    n = numel(x.value);
     for i = 1:n
         fprintf('\n\n\nОптимизация параметра: %s\n', x.name{i});
         % Определение границ
-        [a, b, tmp] = findBracket(@(val) f(setCoord(x, i, val)), x.value(i), x.step(i), maxIter, timeout);
+        [a, b, tmp] = findBracket(@(val) f(setCoord(x, i, val)), x.value(i), x.step(i), maxIter, timeout, data(i));
         data(i).x = tmp.x;
         data(i).y = tmp.y;
         fprintf('\nИнтервал поиска:\t\t[%f; %f]\n', a, b);
@@ -45,7 +69,7 @@ function [x_best, f_best, data] = coordDescentGoldenAuto(f, x, maxIter, timeout)
                 repmat(j, lenX, 1), ...
                 data(j).x(:), ...
                 data(j).y(:), ...
-                'VariableNames', {'Set', 'X', 'Y'});
+                'VariableNames', {'param', 'x', 'y'});
             allData = [allData; temp];
         end
         writetable(allData, 'data_output.csv');
@@ -88,18 +112,16 @@ function [xmin, data] = goldenSection(f, a, b, tol, data)
     xmin = (a + b) / 2;
 end
 
-function [a_out, b_out, data] = findBracket(f1d, x0, step, maxIter, timeout)
+function [a_out, b_out, data] = findBracket(f1d, x0, step, maxIter, timeout, data)
     % f1d — функция от 1 переменной
     % timeout — максимальное время для вызова функции
     % min_step — минимально допустимый шаг
-    data.x = [];
-    data.y = [];
     [fx0, ok] = evalWithTimeout(@() f1d(x0), timeout);
     if ~ok
         error('Не удалось вычислить начальное значение функции');
     end
-    data.x(1) = x0;
-    data.y(1) = fx0;
+    data.x(end + 1) = x0;
+    data.y(end + 1) = fx0;
     % поиск правой границы
     [b_out, data] = findBracketR(f1d, x0, step, maxIter, timeout, data, fx0);
     fprintf('\nНайдена правая граница:\t\t%f\n', b_out);
